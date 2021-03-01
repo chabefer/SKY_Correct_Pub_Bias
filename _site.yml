@@ -1,0 +1,20 @@
+name: "SKY"
+output_dir: "."
+navbar:
+  title: "The Social Science Knowledge Accumulation Initiative"
+  left:
+    - text: "Home"
+      href: index.html
+    - text: "Evidence on Interventions"
+      href: Interventions.html
+    - text: "Evidence on Theories"
+      href: Theories.html
+    - text: "Methods"
+      href: methods.html
+    - text: "About"
+      href: about.html
+      
+      
+output:
+  html_document:
+    theme: flatly

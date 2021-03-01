@@ -1,0 +1,9 @@
+
+
+Welcome to the website of the Social Science Knowledge Accumulation Initiative or SKY.
+
+On this website, you can find:
+
+* [Evidence on the Effectiveness of Social Interventions](Interventions.html)
+* [Evidence for or against Theories of Human Behavior](Theories.html)
+* [A Description of the Methods Used](methods.html)
