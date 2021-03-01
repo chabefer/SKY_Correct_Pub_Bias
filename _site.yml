@@ -1,16 +1,16 @@
 name: "SKY"
 output_dir: "."
 navbar:
-  title: "The Social Science Knowledge Accumulation Initiative"
+  title: "Performances of Methods Correcting for Publication Bias"
   left:
     - text: "Home"
       href: index.html
-    - text: "Evidence on Interventions"
-      href: Interventions.html
-    - text: "Evidence on Theories"
-      href: Theories.html
     - text: "Methods"
-      href: methods.html
+      href: Methods.html
+    - text: "Simulations"
+      href: Simulations.html
+    - text: "Data"
+      href: Data.html
     - text: "About"
       href: about.html
       

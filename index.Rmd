@@ -1,9 +1,9 @@
 
 
-Welcome to the website of the Social Science Knowledge Accumulation Initiative or SKY.
+This is [SKY](https://chabefer.github.io/SKY/index.html) webpage examining the performances of methods correcting for publication bias.
 
-On this website, you can find:
+This webpage contains:
 
-* [Evidence on the Effectiveness of Social Interventions](Interventions.html)
-* [Evidence for or against Theories of Human Behavior](Theories.html)
-* [A Description of the Methods Used](methods.html)
+* [Description of the methods](Methods.html)
+* [Results from simulations](Simulations.html)
+* [Results on real data](Data.html)
