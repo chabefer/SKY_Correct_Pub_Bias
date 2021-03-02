@@ -1,6 +1,6 @@
 # SKY
 
-This is the Git repository for an empty project for contributing to the SKY website.
+This is the Git repository for the project estimating the effectiveness of methods correcting for publication bias, a contribution to the SKY project.
 
 If you want to know more about SKY, please see [here](https://economistjourney.blogspot.com/2019/03/sky-tool-for-decentralized-accumulation.html). 
 
