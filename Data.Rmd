@@ -1,0 +1,6 @@
+---
+title: "Data"
+output: html_document
+---
+
+On this page, we will look at how methods of correction for publication bias perform when tested on actual data.

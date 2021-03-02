@@ -3,4 +3,4 @@ title: "Methods"
 output: html_document
 ---
 
-You can find an extensive discussion of the methods used to correct for publicaiton bias in the collaborative book [Statistical Tools of Causal Inference](https://chabefer.github.io/STCI/sec-meta.html#publication-bias-and-site-selection-bias).
+You can find an extensive discussion of the methods used to correct for publication bias in the collaborative book [Statistical Tools of Causal Inference](https://chabefer.github.io/STCI/sec-meta.html#publication-bias-and-site-selection-bias).
