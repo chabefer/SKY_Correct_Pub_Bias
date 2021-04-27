@@ -7,3 +7,8 @@ This website contains:
 * [Description of the methods](Methods.html)
 * [Results from simulations](Simulations.html)
 * [Results on real data](Data.html)
+
+If you have comments on this project, please post them on the corresponding [GitHub comment page](https://github.com/chabefer/SKY_Correct_Pub_Bias/discussions).
+
+If you want to alter this project, please do so on its [GitHub repo](https://github.com/chabefer/SKY_Correct_Pub_Bias).
+

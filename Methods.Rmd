@@ -4,3 +4,9 @@ output: html_document
 ---
 
 You can find an extensive discussion of the methods used to correct for publication bias in the collaborative book [Statistical Tools of Causal Inference](https://chabefer.github.io/STCI/sec-meta.html#publication-bias-and-site-selection-bias).
+
+The methods we want to test in this project are:
+
+  * FAT-PET-PEESE, in three versions (Fixed effects, random effects and weighted least squares).
+  * p-curving.
+  * Selection models (in their Andrews and Kasy version).

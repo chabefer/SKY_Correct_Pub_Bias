@@ -5,3 +5,4 @@ output: html_document
 
 In this page, we will look at how the various methods of correction for publication bias perform in simulations.
 
+For simulations, we 

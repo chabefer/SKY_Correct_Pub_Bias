@@ -1,0 +1,98 @@
+---
+title: "Testing and correcting for publication bias"
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message=FALSE)
+```
+
+```{r libraries, echo=FALSE}
+library(RMySQL)
+library(metafor)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(ggplot2)
+```
+
+This document documents the analysis of the project "testing and correcting for publication bias".
+The goal of the project is to test several methods of testing of and correction for publication bias both on simulated data and on true data.
+The most basic idea is to emulate Kvarven et al (2019) NHB paper using datasets from replications in psychology as a benchmark and confronting them with the results of meta-analysis published before the replications took place. 
+This is still needed since the results in Kvarven are still open to discussion, are not fully reproducible (with a full-on reproducible program) and do not cover all methods.
+The hope is also to set up a benchmark for accumulating evidence on the extent of publication bias and on the performances of methods testing and correcting for it.
+
+# Empirical assessment of funnel plots
+
+The first order of business is to try to build a very quick bird's eye view of the extent and shape of selection bias in the 15 datasets used by Kvarven.
+They have all been downloaded from the OSC repository of the Kvarven paper into a separate MySQL server, so that all calls to the datasets are normalized.
+Let's first download the datasets. 
+
+```{r libraries, echo=FALSE}
+## On Mac, this is the way to read files
+source(here::here("idsql.R"))
+kvarven <- dbConnect(MySQL(), dbname="Kvarven",
+                     group='LaLonde_amazon',
+                     user=myid, password=mypass, host=myhost)
+# list of datasets
+names.datasets <- dbGetQuery(kvarven,"SELECT `TABLE_NAME` FROM `information_schema`.`COLUMNS` WHERE (`TABLE_SCHEMA` = 'Kvarven');") %>%
+                    pull(TABLE_NAME) %>%
+                    unique()
+# dowload data
+fromSQL <- names.datasets %>% map(~dbReadTable(kvarven, .)) %>% set_names(names.datasets) # returns a list with as many elements as datasets for this paper_id
+```
+
+Now, for each dataset, we want to plot the funnel plot along with the replication-based estimate of the true effect size.
+One way to do that is to regroup all datasets into one and to use the **facetwrap** function of **ggplot**.
+But first, we have to define a new variable taking as value the name of the dataset in each dataset, which will be our grouping variable in the facets.
+Let's see if I can do that.
+
+```{r FullData}
+Studies <- fromSQL[2:16]
+# function generating a new column in a dataframe whose value is unique and in a vector
+NewColumnFun <- function(name,data){
+  data <- data %>%
+            mutate(
+              Study = name
+            )
+  return(data)
+}
+
+# New list of datasets
+Studies <- map2(names.datasets[-1],Studies,NewColumnFun)
+names(Studies) <- names(fromSQL[-1])
+
+# one dataset with all studies
+DataFull <- Studies %>%
+              bind_rows()
+```
+
+I also have to prepare the aggregate data to extract the name of the meta-analysis and the original study so that it has the same and has a correspondance.
+
+```{r AggregateData}
+Aggregate <- fromSQL[[1]] %>%
+              mutate(
+                Study = str_split_fixed(metaanalysis," ",n=2),
+                Original = str_split_fixed(original," ",n=2)
+              )
+Aggregate[["Study"]] <- Aggregate[["Study"]][,1]
+Aggregate[["Original"]] <- Aggregate[["Original"]][,1]
+
+# original study name in the full dataset
+DataFull <- DataFull %>%
+              left_join(select(Aggregate,Study,Original),by="Study")
+```
+
+Let's now plot the data.
+
+```{r FunnelPlotsFullData}
+ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s),color='red',linetype='dashed') +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s),color='green',linetype='dashed') +
+  geom_hline(data=Aggregate,aes(yintercept=effecto),color='blue',linetype='dotted') +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()
+```
