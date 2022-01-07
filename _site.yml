@@ -9,8 +9,8 @@ navbar:
       href: Methods.html
     - text: "Simulations"
       href: Simulations.html
-    - text: "Data"
-      href: Data.html
+    - text: "Evidence"
+      href: Estimation_Pub_Bias.html
     - text: "About"
       href: About.html
       

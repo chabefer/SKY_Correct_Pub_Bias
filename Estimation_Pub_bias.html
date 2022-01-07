@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>Testing and correcting for publication bias</title>
+
+<script src="site_libs/header-attrs-2.11/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/flatly.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.tab('show');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Performances of Methods Correcting for Publication Bias</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="Methods.html">Methods</a>
+</li>
+<li>
+  <a href="Simulations.html">Simulations</a>
+</li>
+<li>
+  <a href="Estimation_Pub_Bias.html">Evidence</a>
+</li>
+<li>
+  <a href="About.html">About</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Testing and correcting for publication bias</h1>
+
+</div>
+
+
+<p>The basic approach follows <a href="http://www.nature.com/articles/s41562-019-0787-z">Kvarven et al (2019)</a>: we confront the results of meta-analysis and of methods to correct for publication bias to the results of pre-registered replications. To ensure that the meta-analysis are not influenced by the results of the replications, we only considermeta-analysis published before the replications took place. As in Kvarven et al (2019), we use 15 effects measured in psychology, for which we have both the original estimated effect size, results from a meta-analysis and from a pre-registered replication. We use the pre-registration estimate as the true benchmark and we compare it to the original estimate, the meta-analytic estimate and the estimates of various methods correcting for publication bias.</p>
+<div id="empirical-assessment-of-funnel-plots" class="section level1">
+<h1>Empirical assessment of funnel plots</h1>
+<p>The first order of business is to try to build a very quick bird’s eye view of the extent and shape of selection bias in the 15 datasets used by Kvarven et al (2019). They have all been downloaded from the OSC repository of the Kvarven paper into a separate MySQL server, so that all calls to the datasets are normalized. Let’s first download the datasets.</p>
+<pre class="r"><code>## On Mac, this is the way to read files
+source(here::here(&quot;idsql.R&quot;))
+kvarven &lt;- dbConnect(MySQL(), dbname=&quot;Kvarven&quot;,
+                     group=&#39;LaLonde_amazon&#39;,
+                     user=myid, password=mypass, host=myhost)
+# list of datasets
+names.datasets &lt;- dbGetQuery(kvarven,&quot;SELECT `TABLE_NAME` FROM `information_schema`.`COLUMNS` WHERE (`TABLE_SCHEMA` = &#39;Kvarven&#39;);&quot;) %&gt;%
+                    pull(TABLE_NAME) %&gt;%
+                    unique()
+# dowload data
+fromSQL &lt;- names.datasets %&gt;% map(~dbReadTable(kvarven, .)) %&gt;% set_names(names.datasets) # returns a list with as many elements as datasets for this paper_id
+# disconnect from server
+dbDisconnect(kvarven)</code></pre>
+<p>Now, for each dataset, we want to plot the funnel plot along with the replication-based estimate of the true effect size. One way to do that is to regroup all datasets into one and to use the <strong>facetwrap</strong> function of <strong>ggplot</strong>. But first, we have to define a new variable taking as value the name of the dataset, which will be our grouping variable in the facets. Let’s see how we can do that.</p>
+<pre class="r"><code>Studies &lt;- fromSQL[2:16] # Omit the first table: it is the aggregated table, containing the summary of the results of each meta-analysis and each replication
+# function generating a new column in a dataframe whose value is unique and in a vector
+NewColumnFun &lt;- function(name,data){
+  data &lt;- data %&gt;%
+            mutate(
+              Study = name
+            )
+  return(data)
+}
+
+# New list of datasets
+Studies &lt;- map2(names.datasets[-1],Studies,NewColumnFun)
+names(Studies) &lt;- names(fromSQL[-1])
+
+# one dataset with all studies
+DataFull &lt;- Studies %&gt;%
+              bind_rows()</code></pre>
+<p>I also have to prepare the aggregated dataset to extract the name of the meta-analysis and the original study.</p>
+<pre class="r"><code>Aggregate &lt;- fromSQL[[1]] %&gt;%
+              mutate(
+                Study = str_split_fixed(metaanalysis,&quot; &quot;,n=2),
+                Original = str_split_fixed(original,&quot; &quot;,n=2)#,
+#                Replication = str_split(replication,&quot; &quot;,n=2)
+              )
+
+Aggregate[[&quot;Study&quot;]] &lt;- Aggregate[[&quot;Study&quot;]][,1]
+Aggregate[[&quot;Original&quot;]] &lt;- Aggregate[[&quot;Original&quot;]][,1]
+#Aggregate[[&quot;Replication&quot;]][is.na(Aggregate[[&quot;Replication&quot;]])] &lt;- &quot;NA&quot;
+#Aggregate[[&quot;Replication&quot;]][dim(Aggregate[[&quot;Replication&quot;]])&gt;1] &lt;- Aggregate[[&quot;Replication&quot;]][,1]
+
+# Adding the name of the original study in the full dataset
+DataFull &lt;- DataFull %&gt;%
+              left_join(select(Aggregate,Study,Original),by=&quot;Study&quot;)</code></pre>
+<p>Let’s now plot the data.</p>
+<pre class="r"><code>ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype=&#39;Replication&#39;),color=&#39;blue&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype=&#39;Meta-analysis&#39;),color=&#39;green&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype=&#39;Original&#39;),color=&#39;red&#39;) +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()+
+  xlab(&#39;Standard error of effect size&#39;)+
+  ylab(&#39;Effect size&#39;) + 
+  scale_linetype_manual(name=&quot;Estimate&quot;,values=c(2,3,2),guide = guide_legend(override.aes = list(color = c(&quot;green&quot;, &quot;red&quot;, &quot;blue&quot;))))</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/FunnelPlotsFullData-1.png" alt="Funnel plot of the studies in Kvarven et al" width="864" />
+<p class="caption">
+Funnel plot of the studies in Kvarven et al
+</p>
+</div>
+<p>The plot shows a very regular pattern over studies: the original effect is most of the time larger than the meta-analytic effect (while it is some time of the same magnitude) and the replication effect is generally smaller than the meta-analytic effect. Now the key question is whether these patterns could have been detected and predicted by a method correcting for publication bias.</p>
+</div>
+<div id="peese" class="section level1">
+<h1>PEESE</h1>
+<p>The first method we are going to try is the PEESE method proposed by <a href="https://www.routledge.com/Meta-Regression-Analysis-in-Economics-and-Business/Stanley-Doucouliagos/p/book/9781138241145">Stanley and Doucouliagos</a>. There are several ways to implement the method (with fixed or random effects, using a Funnel Asymmetry Test and Precision Effect Test before using the PEESE). Here, we are going to start with the simplest approach: use PEESE alone using a Weighted Least Squares estimator as advocated recently by <a href="https://onlinelibrary.wiley.com/doi/abs/10.1002/sim.6481">Stanley and Doucouliagos (2015)</a>. The Weighted Least Squares estimator uses a fixed effect estimator for the main effect (and should thus be less sensitive to publication bias) but also reflects uncertainty due to treatment effect heterogeneity in its standard errors). We will use FAT-PET-PEESE later.</p>
+<p>The first thing to do is to generate the weights for the WLS estimator.</p>
+<pre class="r"><code># Generating weights for WLS
+DataFull &lt;- DataFull %&gt;% 
+  group_by(Study) %&gt;%
+  mutate(
+    vard =sed^2,
+    weights = (1 / vard)/(sum(1 / vard))
+  ) </code></pre>
+<p>Now, let us run the PEESE WLS estimator for each meta-analytic study and recover the intercept, which is the estimated impact corrected for publication bias. We can also recover the coefficient on the variance of the treatment effect, so as to be able to represent the PEESE adjustments on the plot.</p>
+<pre class="r"><code># Running the PEESE regressions and taking the results back
+PEESE &lt;- do(DataFull,tidy(lm(d ~ vard,weights=weights,data=. )))
+
+# sending the PEESE estimates to the Aggregate dataset
+Aggregate &lt;- Aggregate %&gt;%
+              left_join(select(filter(PEESE,term==&quot;(Intercept)&quot;),Study,estimate,std.error),by=&quot;Study&quot;) %&gt;%
+              rename(
+                PEESE_estimate= estimate,
+                PEESE_estimate_se = std.error
+                ) %&gt;%
+              left_join(select(filter(PEESE,term==&quot;vard&quot;),Study,estimate,std.error),by=&quot;Study&quot;) %&gt;%
+              rename(
+                PEESE_var_estimate= estimate,
+                PEESE_var_estimate_se = std.error
+                )</code></pre>
+<p>Let us now plot the resulting PEESE estimates:</p>
+<p>Let’s now plot the data. One thing that seems important and nice is the ability to visualize the PEESE curve. That is going to require some work in R.</p>
+<pre class="r"><code># generating the data for plotting the PEESE curves
+# function for generating the PEESE curve
+PEESE_fun &lt;- function(a,b){
+  return(a+b*2^2)
+}
+# grid of points for sed
+grid.sed &lt;- seq(0,1,0.1)
+# drawing the PEESE curves by iterating over the values of the two parameters
+PEESE_curves &lt;- map2(Aggregate$PEESE_estimate, Aggregate$PEESE_var_estimate, ~ .x + .y*grid.sed^2) %&gt;%
+  set_names(Aggregate$Original) %&gt;%
+  bind_cols(.)
+# append to grid to the dataset
+PEESE_curves$grid &lt;- grid.sed
+# pivot the dataset in long format to use with facet_wrap
+PEESE_curves &lt;- PEESE_curves %&gt;%
+                  pivot_longer(!grid,names_to=&quot;Original&quot;,values_to=&quot;PEESE_pred&quot;)
+
+ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype=&#39;Replication&#39;),color=&#39;blue&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype=&#39;Meta-analysis&#39;),color=&#39;green&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype=&#39;Original&#39;),color=&#39;red&#39;) +
+  geom_line(data=PEESE_curves,aes(x=grid,y=PEESE_pred,linetype=&#39;PEESE&#39;),color=&#39;black&#39;) +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()+
+  xlab(&#39;Standard error of effect size&#39;)+
+  ylab(&#39;Effect size&#39;) + 
+  scale_linetype_manual(name=&quot;Estimate&quot;,values=c(2,3,2,2),guide = guide_legend(override.aes = list(color = c(&quot;green&quot;, &quot;red&quot;,&quot;black&quot;, &quot;blue&quot;))))</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/FunnelPlotsFullDataPEESE-1.png" alt="Funnel plot of the studies in Kvarven et al with PEESE" width="960" />
+<p class="caption">
+Funnel plot of the studies in Kvarven et al with PEESE
+</p>
+</div>
+<p>The plot shows the how the PEESE estimator works: it fits a quadratic curve through the data and its bias-corrected estimate is the intercept of this curve. For the Graham dataset, PEESE interprets wrongly the increase in effect size with precision as signaling that publication bias was coming from above (censoring of imprecise large results) and pushes the estimate above the meta-analytic one, further away from the truth. For the Crichter and Hauser datasets, PEESE makes the same mistake but the consequences are much less severe, and PEESE ends up very close to the meta-analytic estimate. There is one case in which PEESE works badly For all the other datasets, PEESE is closer to the truth than the meta-analytic estimate. The PEESE correction is sometimes spectacular, like in the Husnu, Monin, Oppenheimer and Schwarz datasets, where PEESE is indistiguishable from the true effect.</p>
+<p>One way to compute the performance of the PEESE estimator (or of any estimator) is to report some statistics for its distance to the truth (taken here to be the replication estimate). Let us compute several such estimates: the mean bias, the mean absolute deviation and the root mean squared error. We will do that for the PEESE estimator and for the meta-analytic estimator, in order to measure the improvement in estimation brought about by the PEESE estimator over the meta-analytic estimate.</p>
+<pre class="r"><code># computing the bias, mean absolute deviation and root mean square error of PEESE and the meta-analysis
+PEESE_bias &lt;- Aggregate %&gt;%
+                mutate(
+                  PEESE_bias = PEESE_estimate-replication_s,
+                  Meta_bias = meta_s-replication_s,
+                  Original_bias = effecto-replication_s
+                  ) %&gt;%
+                summarize(
+                  PEESE_MeanBias = mean(PEESE_bias),
+                  Meta_MeanBias = mean(Meta_bias),
+                  Original_MeanBias = mean(Original_bias),
+                  PEESE_MAD = mean(abs(PEESE_bias)),
+                  Meta_MAD = mean(abs(Meta_bias)),
+                  Original_MAD = mean(abs(Original_bias)),
+                  PEESE_RMSE = sqrt(mean(PEESE_bias^2)),
+                  Meta_RMSE = sqrt(mean(Meta_bias^2)),
+                  Original_RMSE = sqrt(mean(Original_bias^2))
+                )</code></pre>
+<p>We are going to send these estimates to a table on SKY and we will use them to generate a graph of the performances of various methods for correcting for publication bias at the top of this page.</p>
+<pre class="r"><code># putting the estimates in long format
+Method_bias &lt;- PEESE_bias %&gt;%
+                pivot_longer(
+                  cols=1:9,
+                  names_to=c(&quot;Method&quot;,&quot;Value&quot;),
+                  names_sep= &quot;_&quot;,
+                  values_to = &quot;value&quot;
+                ) %&gt;%
+                pivot_wider(
+                  id_cols=Method,
+                  names_from=Value
+                ) 
+
+# sending the estimates to SKY
+# connecting
+source(here::here(&quot;idsql.R&quot;))
+SKY &lt;- dbConnect(MySQL(), dbname=&quot;SKY&quot;,
+                     user=myid, password=mypass, host=myhost)
+# sending
+dbWriteTable(SKY,&quot;Correct_Pub_Bias&quot;,Method_bias,overwrite=TRUE)
+# disconnecting
+dbDisconnect(SKY)</code></pre>
+<p><strong>We should add the performances of the original estimate as well</strong></p>
+<p>Finally, a very useful way to visualize our results is to plot the original, meta-analytic and PEESE estimates against the truth.</p>
+<pre class="r"><code># preparing dataset for the plot: pivoting longer
+plotXYdata &lt;- Aggregate %&gt;%
+                select(Original,replication_s,effecto,meta_s,PEESE_estimate) %&gt;%
+                pivot_longer(
+                  cols=effecto:PEESE_estimate,
+                  names_to=&quot;Method&quot;,
+                  values_to=&quot;Estimate&quot; 
+                ) %&gt;%
+                rename(
+                  Replication = replication_s
+                ) %&gt;%
+                mutate(
+                  Method = if_else(Method==&quot;effecto&quot;,&quot;Original&quot;,
+                                   if_else(Method==&quot;meta_s&quot;,&quot;Meta-analysis&quot;,&quot;PEESE&quot;)),
+                  Method=factor(Method,levels=c(&quot;Original&quot;,&quot;Meta-analysis&quot;,&quot;PEESE&quot;))
+                )
+
+# plot
+ggplot(plotXYdata,aes(x=Replication,y=Estimate,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  geom_function(fun=~.x,color=&quot;black&quot;,linetype=&quot;dashed&quot;)+
+  coord_cartesian(xlim=c(-0.1,0.8),ylim=c(-0.1,1))+
+  theme_bw() +
+  xlab(&quot;Replication effect size&quot;) +
+  ylab(&quot;Estimated effect size&quot;)</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/PlotMethodsXY-1.png" alt="Original, meta-analytic and PEESE estimates as a function of the replication effect size" width="960" />
+<p class="caption">
+Original, meta-analytic and PEESE estimates as a function of the replication effect size
+</p>
+</div>
+<p>Most of the action on the graph occurs for low values of the replicated effect size. There, the original estimates are much more biased than the meta-analytic ones, which are themselves more biased than PEESE. PEESE does badly in the intermediate range of replication effect sizes because of the overestimated effect in the Graham study. A version of the estimator that would not implement any correction when the correlation between effect size and its standard error is negative would avoid similar mistakes and would work better than PEESE.</p>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, echo=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message=FALSE)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message=FALSE,results = FALSE)
 ```
 
 ```{r libraries, echo=FALSE}
@@ -15,21 +15,21 @@ library(dplyr)
 library(stringr)
 library(purrr)
 library(ggplot2)
+library(broom)
 ```
 
-This document documents the analysis of the project "testing and correcting for publication bias".
-The goal of the project is to test several methods of testing of and correction for publication bias both on simulated data and on true data.
-The most basic idea is to emulate Kvarven et al (2019) NHB paper using datasets from replications in psychology as a benchmark and confronting them with the results of meta-analysis published before the replications took place. 
-This is still needed since the results in Kvarven are still open to discussion, are not fully reproducible (with a full-on reproducible program) and do not cover all methods.
-The hope is also to set up a benchmark for accumulating evidence on the extent of publication bias and on the performances of methods testing and correcting for it.
+The basic approach follows [Kvarven et al (2019)](http://www.nature.com/articles/s41562-019-0787-z): we confront the results of meta-analysis and of methods to correct for publication bias to the results of pre-registered replications.
+To ensure that the meta-analysis are not influenced by the results of the replications, we only considermeta-analysis published before the replications took place. 
+As in Kvarven et al (2019), we use 15 effects measured in psychology, for which we have both the original estimated effect size, results from a meta-analysis and from a pre-registered replication.
+We use the pre-registration estimate as the true benchmark and we compare it to the original estimate, the meta-analytic estimate and the estimates of various methods correcting for publication bias.
 
 # Empirical assessment of funnel plots
 
-The first order of business is to try to build a very quick bird's eye view of the extent and shape of selection bias in the 15 datasets used by Kvarven.
+The first order of business is to try to build a very quick bird's eye view of the extent and shape of selection bias in the 15 datasets used by Kvarven et al (2019).
 They have all been downloaded from the OSC repository of the Kvarven paper into a separate MySQL server, so that all calls to the datasets are normalized.
 Let's first download the datasets. 
 
-```{r libraries, echo=FALSE}
+```{r data, echo=TRUE}
 ## On Mac, this is the way to read files
 source(here::here("idsql.R"))
 kvarven <- dbConnect(MySQL(), dbname="Kvarven",
@@ -41,15 +41,17 @@ names.datasets <- dbGetQuery(kvarven,"SELECT `TABLE_NAME` FROM `information_sche
                     unique()
 # dowload data
 fromSQL <- names.datasets %>% map(~dbReadTable(kvarven, .)) %>% set_names(names.datasets) # returns a list with as many elements as datasets for this paper_id
+# disconnect from server
+dbDisconnect(kvarven)
 ```
 
 Now, for each dataset, we want to plot the funnel plot along with the replication-based estimate of the true effect size.
 One way to do that is to regroup all datasets into one and to use the **facetwrap** function of **ggplot**.
-But first, we have to define a new variable taking as value the name of the dataset in each dataset, which will be our grouping variable in the facets.
-Let's see if I can do that.
+But first, we have to define a new variable taking as value the name of the dataset, which will be our grouping variable in the facets.
+Let's see how we can do that.
 
 ```{r FullData}
-Studies <- fromSQL[2:16]
+Studies <- fromSQL[2:16] # Omit the first table: it is the aggregated table, containing the summary of the results of each meta-analysis and each replication
 # function generating a new column in a dataframe whose value is unique and in a vector
 NewColumnFun <- function(name,data){
   data <- data %>%
@@ -68,31 +70,219 @@ DataFull <- Studies %>%
               bind_rows()
 ```
 
-I also have to prepare the aggregate data to extract the name of the meta-analysis and the original study so that it has the same and has a correspondance.
+I also have to prepare the aggregated dataset to extract the name of the meta-analysis and the original study.
 
 ```{r AggregateData}
 Aggregate <- fromSQL[[1]] %>%
               mutate(
                 Study = str_split_fixed(metaanalysis," ",n=2),
-                Original = str_split_fixed(original," ",n=2)
+                Original = str_split_fixed(original," ",n=2)#,
+#                Replication = str_split(replication," ",n=2)
               )
+
 Aggregate[["Study"]] <- Aggregate[["Study"]][,1]
 Aggregate[["Original"]] <- Aggregate[["Original"]][,1]
+#Aggregate[["Replication"]][is.na(Aggregate[["Replication"]])] <- "NA"
+#Aggregate[["Replication"]][dim(Aggregate[["Replication"]])>1] <- Aggregate[["Replication"]][,1]
 
-# original study name in the full dataset
+# Adding the name of the original study in the full dataset
 DataFull <- DataFull %>%
               left_join(select(Aggregate,Study,Original),by="Study")
 ```
 
 Let's now plot the data.
 
-```{r FunnelPlotsFullData}
+```{r FunnelPlotsFullData,fig.cap='Funnel plot of the studies in Kvarven et al',fig.align='center',fig.width=9}
 ggplot(DataFull,aes(x=sed,y=d)) +
   geom_point()+
-  geom_hline(data=Aggregate,aes(yintercept=replication_s),color='red',linetype='dashed') +
-  geom_hline(data=Aggregate,aes(yintercept=meta_s),color='green',linetype='dashed') +
-  geom_hline(data=Aggregate,aes(yintercept=effecto),color='blue',linetype='dotted') +
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype='Replication'),color='blue') +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype='Meta-analysis'),color='green') +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype='Original'),color='red') +
   coord_cartesian(ylim=c(-1,2))+
   facet_wrap(~Original)+
-  theme_bw()
+  theme_bw()+
+  xlab('Standard error of effect size')+
+  ylab('Effect size') + 
+  scale_linetype_manual(name="Estimate",values=c(2,3,2),guide = guide_legend(override.aes = list(color = c("green", "red", "blue"))))
 ```
+The plot shows a very regular pattern over studies: the original effect is most of the time larger than the meta-analytic effect (while it is some time of the same magnitude) and the replication effect is generally smaller than the meta-analytic effect.
+Now the key question is whether these patterns could have been detected and predicted by a method correcting for publication bias.
+
+# PEESE
+
+The first method we are going to try is the PEESE method proposed by [Stanley and Doucouliagos](https://www.routledge.com/Meta-Regression-Analysis-in-Economics-and-Business/Stanley-Doucouliagos/p/book/9781138241145).
+There are several ways to implement the method (with fixed or random effects, using a Funnel Asymmetry Test and Precision Effect Test before using the PEESE). 
+Here, we are going to start with the simplest approach: use PEESE alone using a Weighted Least Squares estimator as advocated recently by [Stanley and Doucouliagos (2015)](https://onlinelibrary.wiley.com/doi/abs/10.1002/sim.6481).
+The Weighted Least Squares estimator uses a fixed effect estimator for the main effect (and should thus be less sensitive to publication bias) but also reflects uncertainty due to treatment effect heterogeneity in its standard errors). 
+We will use FAT-PET-PEESE later.
+
+The first thing to do is to generate the weights for the WLS estimator.
+
+```{r Weights}
+# Generating weights for WLS
+DataFull <- DataFull %>% 
+  group_by(Study) %>%
+  mutate(
+    vard =sed^2,
+    weights = (1 / vard)/(sum(1 / vard))
+  ) 
+```
+
+Now, let us run the PEESE WLS estimator for each meta-analytic study and recover the intercept, which is the estimated impact corrected for publication bias.
+We can also recover the coefficient on the variance of the treatment effect, so as to be able to represent the PEESE adjustments on the plot.
+
+```{r PEESE}
+# Running the PEESE regressions and taking the results back
+PEESE <- do(DataFull,tidy(lm(d ~ vard,weights=weights,data=. )))
+
+# sending the PEESE estimates to the Aggregate dataset
+Aggregate <- Aggregate %>%
+              left_join(select(filter(PEESE,term=="(Intercept)"),Study,estimate,std.error),by="Study") %>%
+              rename(
+                PEESE_estimate= estimate,
+                PEESE_estimate_se = std.error
+                ) %>%
+              left_join(select(filter(PEESE,term=="vard"),Study,estimate,std.error),by="Study") %>%
+              rename(
+                PEESE_var_estimate= estimate,
+                PEESE_var_estimate_se = std.error
+                )
+```
+
+Let us now plot the resulting PEESE estimates:
+
+Let's now plot the data.
+One thing that seems important and nice is the ability to visualize the PEESE curve.
+That is going to require some work in R.
+
+```{r FunnelPlotsFullDataPEESE,fig.cap='Funnel plot of the studies in Kvarven et al with PEESE',fig.align='center',fig.width=10}
+# generating the data for plotting the PEESE curves
+# function for generating the PEESE curve
+PEESE_fun <- function(a,b){
+  return(a+b*2^2)
+}
+# grid of points for sed
+grid.sed <- seq(0,1,0.1)
+# drawing the PEESE curves by iterating over the values of the two parameters
+PEESE_curves <- map2(Aggregate$PEESE_estimate, Aggregate$PEESE_var_estimate, ~ .x + .y*grid.sed^2) %>%
+  set_names(Aggregate$Original) %>%
+  bind_cols(.)
+# append to grid to the dataset
+PEESE_curves$grid <- grid.sed
+# pivot the dataset in long format to use with facet_wrap
+PEESE_curves <- PEESE_curves %>%
+                  pivot_longer(!grid,names_to="Original",values_to="PEESE_pred")
+
+ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype='Replication'),color='blue') +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype='Meta-analysis'),color='green') +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype='Original'),color='red') +
+  geom_line(data=PEESE_curves,aes(x=grid,y=PEESE_pred,linetype='PEESE'),color='black') +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()+
+  xlab('Standard error of effect size')+
+  ylab('Effect size') + 
+  scale_linetype_manual(name="Estimate",values=c(2,3,2,2),guide = guide_legend(override.aes = list(color = c("green", "red","black", "blue"))))
+```
+The plot shows the how the PEESE estimator works: it fits a quadratic curve through the data and its bias-corrected estimate is the intercept of this curve.
+For the Graham dataset, PEESE interprets wrongly the increase in effect size with precision as signaling that publication bias was coming from above (censoring of imprecise large results) and pushes the estimate above the meta-analytic one, further away from the truth.
+For the Crichter and Hauser datasets, PEESE makes the same mistake but the consequences are much less severe, and PEESE ends up very close to the meta-analytic estimate.
+There is one case in which PEESE works badly
+For all the other datasets, PEESE is closer to the truth than the meta-analytic estimate.
+The PEESE correction is sometimes spectacular, like in the Husnu, Monin, Oppenheimer and Schwarz datasets, where PEESE is indistiguishable from the true effect.
+
+One way to compute the performance of the PEESE estimator (or of any estimator) is to report some statistics for its distance to the truth (taken here to be the replication estimate).
+Let us compute several such estimates: the mean bias, the mean absolute deviation and the root mean squared error.
+We will do that for the PEESE estimator and for the meta-analytic estimator, in order to measure the improvement in estimation brought about by the PEESE estimator over the meta-analytic estimate.
+
+```{r PEESEperf}
+# computing the bias, mean absolute deviation and root mean square error of PEESE and the meta-analysis
+PEESE_bias <- Aggregate %>%
+                mutate(
+                  PEESE_bias = PEESE_estimate-replication_s,
+                  Meta_bias = meta_s-replication_s,
+                  Original_bias = effecto-replication_s
+                  ) %>%
+                summarize(
+                  PEESE_MeanBias = mean(PEESE_bias),
+                  Meta_MeanBias = mean(Meta_bias),
+                  Original_MeanBias = mean(Original_bias),
+                  PEESE_MAD = mean(abs(PEESE_bias)),
+                  Meta_MAD = mean(abs(Meta_bias)),
+                  Original_MAD = mean(abs(Original_bias)),
+                  PEESE_RMSE = sqrt(mean(PEESE_bias^2)),
+                  Meta_RMSE = sqrt(mean(Meta_bias^2)),
+                  Original_RMSE = sqrt(mean(Original_bias^2))
+                )
+```
+
+We are going to send these estimates to a table on SKY and we will use them to generate a graph of the performances of various methods for correcting for publication bias at the top of this page.
+
+```{r toSKY}
+# putting the estimates in long format
+Method_bias <- PEESE_bias %>%
+                pivot_longer(
+                  cols=1:9,
+                  names_to=c("Method","Value"),
+                  names_sep= "_",
+                  values_to = "value"
+                ) %>%
+                pivot_wider(
+                  id_cols=Method,
+                  names_from=Value
+                ) 
+
+# sending the estimates to SKY
+# connecting
+source(here::here("idsql.R"))
+SKY <- dbConnect(MySQL(), dbname="SKY",
+                     user=myid, password=mypass, host=myhost)
+# sending
+dbWriteTable(SKY,"Correct_Pub_Bias",Method_bias,overwrite=TRUE)
+# disconnecting
+dbDisconnect(SKY)
+```
+
+**We should add the performances of the original estimate as well**
+
+Finally, a very useful way to visualize our results is to plot the original, meta-analytic and PEESE estimates against the truth. 
+
+```{r PlotMethodsXY,fig.cap='Original, meta-analytic and PEESE estimates as a function of the replication effect size',fig.align='center',fig.width=10}
+# preparing dataset for the plot: pivoting longer
+plotXYdata <- Aggregate %>%
+                select(Original,replication_s,effecto,meta_s,PEESE_estimate) %>%
+                pivot_longer(
+                  cols=effecto:PEESE_estimate,
+                  names_to="Method",
+                  values_to="Estimate" 
+                ) %>%
+                rename(
+                  Replication = replication_s
+                ) %>%
+                mutate(
+                  Method = if_else(Method=="effecto","Original",
+                                   if_else(Method=="meta_s","Meta-analysis","PEESE")),
+                  Method=factor(Method,levels=c("Original","Meta-analysis","PEESE"))
+                )
+
+# plot
+ggplot(plotXYdata,aes(x=Replication,y=Estimate,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  geom_function(fun=~.x,color="black",linetype="dashed")+
+  coord_cartesian(xlim=c(-0.1,0.8),ylim=c(-0.1,1))+
+  theme_bw() +
+  xlab("Replication effect size") +
+  ylab("Estimated effect size")
+  
+```
+Most of the action on the graph occurs for low values of the replicated effect size. 
+There, the original estimates are much more biased than the meta-analytic ones, which are themselves more biased than PEESE.
+PEESE does badly in the intermediate range of replication effect sizes because of the overestimated effect in the Graham study.
+A version of the estimator that would not implement any correction when the correlation between effect size and its standard error is negative would avoid similar mistakes and would work better than PEESE.
+
+
+
+
