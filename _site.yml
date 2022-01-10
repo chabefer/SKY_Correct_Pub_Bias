@@ -10,7 +10,7 @@ navbar:
     - text: "Simulations"
       href: Simulations.html
     - text: "Evidence"
-      href: Estimation_Pub_Bias.html
+      href: Estimation_Pub_bias.html
     - text: "About"
       href: About.html
       

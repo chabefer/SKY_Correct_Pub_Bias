@@ -6,7 +6,7 @@ This website contains:
 
 * [Description of the methods](Methods.html)
 * [Results from simulations](Simulations.html)
-* [Results on real data](Estimation_Pub_Bias.html)
+* [Results on real data](Estimation_Pub_bias.html)
 
 The main results of the project so far can be summarized in the performance of the various estimators of the true effect compared to pre-registered replications.
 The analysis behind this data is available [here](Estimation_Pub_Bias.html).
