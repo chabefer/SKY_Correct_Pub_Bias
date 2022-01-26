@@ -27,7 +27,7 @@ PerfMethodsPubBias <- dbReadTable(SKY,"Correct_Pub_Bias") %>%
                         mutate(
                           Criteria=factor(Criteria,levels=c("MeanBias","MAD","RMSE")),
                           Method = if_else(Method=="Meta","Meta-analysis",Method),
-                          Method=factor(Method,levels=c("Original","Meta-analysis","PEESE"))
+                          Method=factor(Method,levels=c("Original","Meta-analysis","PEESE","PEESEpos"))
                         )
 # disconnecting
 dbDisconnect(SKY)
@@ -40,9 +40,9 @@ ggplot(PerfMethodsPubBias,aes(x=Criteria,y=Bias,fill=Method))+
 
 The original estimates have large baises.
 Meta-analysis divides the mean bias by two.
-The PEESE method brings the bias further down by 40\%.
+The PEESE and PEESEpos methods brings the bias further down by 40\%.
 The other criteria tell a similar story.
-This data makes the PEESE estimator the best estimator so far to estimate true treatment effects using the published record.
+This data makes the PEESE and PEESEpos estimators the best estimators so far to estimate true treatment effects using the published record.
 
 If you have comments on this project, please post them on the corresponding [GitHub comment page](https://github.com/chabefer/SKY_Correct_Pub_Bias/discussions).
 

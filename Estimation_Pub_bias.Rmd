@@ -1,6 +1,8 @@
 ---
 title: "Testing and correcting for publication bias"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, echo=FALSE}
@@ -10,8 +12,8 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message=FALSE,res
 ```{r libraries, echo=FALSE}
 library(RMySQL)
 library(metafor)
-library(tidyr)
 library(dplyr)
+library(tidyr)
 library(stringr)
 library(purrr)
 library(ggplot2)
@@ -193,26 +195,63 @@ There is one case in which PEESE works badly
 For all the other datasets, PEESE is closer to the truth than the meta-analytic estimate.
 The PEESE correction is sometimes spectacular, like in the Husnu, Monin, Oppenheimer and Schwarz datasets, where PEESE is indistiguishable from the true effect.
 
+Most of the action on the graph occurs for low values of the replicated effect size. 
+There, the original estimates are much more biased than the meta-analytic ones, which are themselves more biased than PEESE.
+PEESE does badly in the intermediate range of replication effect sizes because of the overestimated effect in the Graham study.
+A version of the estimator that would not implement any correction when the correlation between effect size and its standard error is negative would avoid similar mistakes and would work better than PEESE.
+
+# PEESE without the negative correlations
+
+What if instead of computing the PEESE estimate when the correlation between effect size and standard error is negative, we were simply keeping the initial meta-analytic estimate?
+This is exceedingly simple to do.
+We just replace the PEESE estimate by the original meta-analytic estimate when the coefficient on the variance of the treatment effect is negative.
+Let's just do it.
+
+```{r PEESEpos}
+# computing the PEESE positive estimates
+Aggregate <- Aggregate %>%
+              mutate(PEESEpos_estimate = if_else(PEESE_var_estimate>0,PEESE_estimate,meta_s))
+```
+
+
+# FAT-PET-PEESE
+
+
+# FAT-PET-PEESE without the negative correlations
+
+# p-curving
+
+# Selection models
+
+# Regularizing estimates by their mean bias
+
+
+# Performance of the estimators
+
 One way to compute the performance of the PEESE estimator (or of any estimator) is to report some statistics for its distance to the truth (taken here to be the replication estimate).
 Let us compute several such estimates: the mean bias, the mean absolute deviation and the root mean squared error.
 We will do that for the PEESE estimator and for the meta-analytic estimator, in order to measure the improvement in estimation brought about by the PEESE estimator over the meta-analytic estimate.
 
-```{r PEESEperf}
+```{r EstimPerf}
 # computing the bias, mean absolute deviation and root mean square error of PEESE and the meta-analysis
-PEESE_bias <- Aggregate %>%
+Estim_bias <- Aggregate %>%
                 mutate(
                   PEESE_bias = PEESE_estimate-replication_s,
+                  PEESEpos_bias = PEESEpos_estimate-replication_s,
                   Meta_bias = meta_s-replication_s,
                   Original_bias = effecto-replication_s
                   ) %>%
                 summarize(
                   PEESE_MeanBias = mean(PEESE_bias),
+                  PEESEpos_MeanBias = mean(PEESEpos_bias),
                   Meta_MeanBias = mean(Meta_bias),
                   Original_MeanBias = mean(Original_bias),
                   PEESE_MAD = mean(abs(PEESE_bias)),
+                  PEESEpos_MAD = mean(abs(PEESEpos_bias)),
                   Meta_MAD = mean(abs(Meta_bias)),
                   Original_MAD = mean(abs(Original_bias)),
                   PEESE_RMSE = sqrt(mean(PEESE_bias^2)),
+                  PEESEpos_RMSE = sqrt(mean(PEESEpos_bias^2)),
                   Meta_RMSE = sqrt(mean(Meta_bias^2)),
                   Original_RMSE = sqrt(mean(Original_bias^2))
                 )
@@ -222,9 +261,9 @@ We are going to send these estimates to a table on SKY and we will use them to g
 
 ```{r toSKY}
 # putting the estimates in long format
-Method_bias <- PEESE_bias %>%
+Method_bias <- Estim_bias %>%
                 pivot_longer(
-                  cols=1:9,
+                  cols=1:ncol(Estim_bias),
                   names_to=c("Method","Value"),
                   names_sep= "_",
                   values_to = "value"
@@ -245,16 +284,14 @@ dbWriteTable(SKY,"Correct_Pub_Bias",Method_bias,overwrite=TRUE)
 dbDisconnect(SKY)
 ```
 
-**We should add the performances of the original estimate as well**
-
 Finally, a very useful way to visualize our results is to plot the original, meta-analytic and PEESE estimates against the truth. 
 
 ```{r PlotMethodsXY,fig.cap='Original, meta-analytic and PEESE estimates as a function of the replication effect size',fig.align='center',fig.width=10}
 # preparing dataset for the plot: pivoting longer
 plotXYdata <- Aggregate %>%
-                select(Original,replication_s,effecto,meta_s,PEESE_estimate) %>%
+                select(Original,replication_s,effecto,meta_s,PEESE_estimate,PEESEpos_estimate) %>%
                 pivot_longer(
-                  cols=effecto:PEESE_estimate,
+                  cols=effecto:PEESEpos_estimate,
                   names_to="Method",
                   values_to="Estimate" 
                 ) %>%
@@ -263,8 +300,9 @@ plotXYdata <- Aggregate %>%
                 ) %>%
                 mutate(
                   Method = if_else(Method=="effecto","Original",
-                                   if_else(Method=="meta_s","Meta-analysis","PEESE")),
-                  Method=factor(Method,levels=c("Original","Meta-analysis","PEESE"))
+                                   if_else(Method=="meta_s","Meta-analysis",
+                                           if_else(Method=="PEESE_estimate","PEESE","PEESEpos"))),
+                  Method=factor(Method,levels=c("Original","Meta-analysis","PEESE","PEESEpos"))
                 )
 
 # plot
@@ -278,11 +316,5 @@ ggplot(plotXYdata,aes(x=Replication,y=Estimate,color=Method)) +
   ylab("Estimated effect size")
   
 ```
-Most of the action on the graph occurs for low values of the replicated effect size. 
-There, the original estimates are much more biased than the meta-analytic ones, which are themselves more biased than PEESE.
-PEESE does badly in the intermediate range of replication effect sizes because of the overestimated effect in the Graham study.
-A version of the estimator that would not implement any correction when the correlation between effect size and its standard error is negative would avoid similar mistakes and would work better than PEESE.
-
-
 
 
