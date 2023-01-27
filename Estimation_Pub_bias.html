@@ -13,7 +13,7 @@
 
 <title>Testing and correcting for publication bias</title>
 
-<script src="site_libs/header-attrs-2.11/header-attrs.js"></script>
+<script src="site_libs/header-attrs-2.14/header-attrs.js"></script>
 <script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link href="site_libs/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
@@ -60,6 +60,7 @@ if (window.hljs) {
 
 
 
+
 <style type = "text/css">
 .main-container {
   max-width: 940px;
@@ -80,6 +81,9 @@ button.code-folding-btn:focus {
 }
 summary {
   display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
 }
 pre code {
   padding: 0;
@@ -232,7 +236,7 @@ $(document).ready(function () {
 <div class="navbar navbar-default  navbar-fixed-top" role="navigation">
   <div class="container">
     <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
@@ -388,9 +392,9 @@ PEESE_curves &lt;- map2(Aggregate$PEESE_estimate, Aggregate$PEESE_var_estimate, 
 PEESE_curves$grid &lt;- grid.sed
 # pivot the dataset in long format to use with facet_wrap
 PEESE_curves &lt;- PEESE_curves %&gt;%
-                  pivot_longer(!grid,names_to=&quot;Original&quot;,values_to=&quot;PEESE_pred&quot;)
-
-ggplot(DataFull,aes(x=sed,y=d)) +
+                  pivot_longer(!grid,names_to=&quot;Original&quot;,values_to=&quot;PEESE_pred&quot;)</code></pre>
+<p>Let us plot the resulting estimates</p>
+<pre class="r"><code>ggplot(DataFull,aes(x=sed,y=d)) +
   geom_point()+
   geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype=&#39;Replication&#39;),color=&#39;blue&#39;) +
   geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype=&#39;Meta-analysis&#39;),color=&#39;green&#39;) +
@@ -411,24 +415,303 @@ Funnel plot of the studies in Kvarven et al with PEESE
 <p>The plot shows the how the PEESE estimator works: it fits a quadratic curve through the data and its bias-corrected estimate is the intercept of this curve. For the Graham dataset, PEESE interprets wrongly the increase in effect size with precision as signaling that publication bias was coming from above (censoring of imprecise large results) and pushes the estimate above the meta-analytic one, further away from the truth. For the Crichter and Hauser datasets, PEESE makes the same mistake but the consequences are much less severe, and PEESE ends up very close to the meta-analytic estimate. There is one case in which PEESE works badly For all the other datasets, PEESE is closer to the truth than the meta-analytic estimate. The PEESE correction is sometimes spectacular, like in the Husnu, Monin, Oppenheimer and Schwarz datasets, where PEESE is indistiguishable from the true effect.</p>
 <p>Most of the action on the graph occurs for low values of the replicated effect size. There, the original estimates are much more biased than the meta-analytic ones, which are themselves more biased than PEESE. PEESE does badly in the intermediate range of replication effect sizes because of the overestimated effect in the Graham study. A version of the estimator that would not implement any correction when the correlation between effect size and its standard error is negative would avoid similar mistakes and would work better than PEESE.</p>
 </div>
-<div id="peese-without-the-negative-correlations" class="section level1">
-<h1>PEESE without the negative correlations</h1>
-<p>What if instead of computing the PEESE estimate when the correlation between effect size and standard error is negative, we were simply keeping the initial meta-analytic estimate? This is exceedingly simple to do. We just replace the PEESE estimate by the original meta-analytic estimate when the coefficient on the variance of the treatment effect is negative. Let’s just do it.</p>
-<pre class="r"><code># computing the PEESE positive estimates
-Aggregate &lt;- Aggregate %&gt;%
-              mutate(PEESEpos_estimate = if_else(PEESE_var_estimate&gt;0,PEESE_estimate,meta_s))</code></pre>
-</div>
 <div id="fat-pet-peese" class="section level1">
 <h1>FAT-PET-PEESE</h1>
+<p>The classical approach proposed by <a href="https://www.routledge.com/Meta-Regression-Analysis-in-Economics-and-Business/Stanley-Doucouliagos/p/book/9781138241145">Stanley and Doucouliagos</a> is to implement the <a href="https://chabefer.github.io/STCI/meta.html#fat-pet-peese">FAT-PET-PEESE estimator</a>.</p>
+<p>Their approach is based on three steps:</p>
+<ol style="list-style-type: decimal">
+<li>The Funnel Asymmetry Test (FAT) tests whether there is a relationship between effect sizes and their precision. FAT uses as its null the hypothesis that the value of the slope in a regression of effect sizes on their precision measured by their standard error is zero. If there is no sign of publication bias, keep the estimate from the normal meta-analysis. If there is sign of publication bias, move to step 2.</li>
+<li>The Precision-Effect Test (PET) estimates the effect corrected for publication bias and tests for its existence. PET uses as its null the hypothesis that the value of the constant in a regression of effect sizes on their precision measured by their standard error is zero. If the null is not rejected, the assumed value of the meta-analytic treatment effect is zero (or at least the constant? it is the only way to get a standard error (we are going to try both)). If the null is rejected, move to step 3.</li>
+<li>The Precision-Effect Estimate with Standard Error (PEESE) estimates the effect corrected for publication bias using a non-linear model for the standard error. When there is a genuine effect, PEESE offers a less biased estimate than PET.</li>
+</ol>
+<p>The first thing we need is to code a function that will spit out the FAT-PET-PEESE estimator for a given dataset.</p>
+<pre class="r"><code># computing the FAT-PET-PEESE function
+# it is a function of:
+# data: dataset on which the tests are performed
+# FAT.alpha: value of the size of the FAT test
+# FAT.oneside: if TRUE, performs a one-sided FAT test, otherwise two-sided.
+# PET.alpha: value of the size of the PET test
+# PET.oneside: if TRUE, performs a one-sided PET test, otherwise two-sided.
+# FAT.neg: if TRUE, discard FATPETPEESE estimates when the slope of the FAT test is negative
+fatpetpeese &lt;- function(data,FAT.alpha=0.05,FAT.oneside=FALSE,PET.alpha=0.05,PET.oneside=FALSE,FAT.neg=TRUE){
+  # WLS meta-analysis
+  wls.reg &lt;- lm(d ~ 1,weights=weights,data=data)
+  wls.est &lt;- coefficients(wls.reg)[[1]]
+  wls.est.se &lt;- sqrt(vcov(wls.reg)[1,1])
+  # FAT and PET regression
+  fat.pet.reg &lt;- lm(d ~ sed,weights=weights,data=data)
+  fat.pet.est &lt;- coefficients(fat.pet.reg)[[1]]
+  fat.pet.est.se &lt;- sqrt(vcov(fat.pet.reg)[1,1])
+  fat.pet.slope &lt;- coefficients(fat.pet.reg)[[2]]
+  fat.pet.slope.se &lt;- sqrt(vcov(fat.pet.reg)[2,2])
+  # PEESE regression
+  peese.reg &lt;- lm(d ~ vard,weights=weights,data=data)
+  peese.est &lt;- coefficients(peese.reg)[[1]]
+  peese.est.se &lt;- sqrt(vcov(peese.reg)[1,1])
+  peese.slope &lt;- coefficients(peese.reg)[[2]]
+  peese.slope.se &lt;- sqrt(vcov(peese.reg)[2,2])
+  # FAT test: t-test of assumption that slope is zero with FAT.alpha size (no correction for degrees of freedom)
+  # value one for evidence of publication bias, zero otherwise
+  if (FAT.oneside==TRUE){
+    fat.test &lt;- if_else(fat.pet.slope/fat.pet.slope.se&gt;qnorm(1-FAT.alpha),1,0) # value one for evidence of publication bias, zero otherwise
+  }
+  if (FAT.oneside==FALSE){
+    fat.test &lt;- if_else(abs(fat.pet.slope/fat.pet.slope.se)&gt;qnorm(1-FAT.alpha/2),1,0)
+  }
+  # if no signs of publication bias, go back to WLS meta-analytic estimate 
+  if (fat.test==0){
+   fat.pet.peese.est &lt;- wls.est
+   fat.pet.peese.est.se &lt;- wls.est.se
+  }
+  # if signs of publication bias, test whether the PET effect is different from zero or not
+  # if not different from zero, keep zero as an estimate (for now, maybe we&#39;ll keep the PET estimate at some point)
+  if (fat.test==1){
+    # PET test: t-test of assumption that constant is zero with 5% size (no correction for degrees of freedom)
+    if (PET.oneside==TRUE){
+      pet.test &lt;- if_else(coefficients(fat.pet.reg)[[1]]/(sqrt(vcov(fat.pet.reg)[1,1]))&gt;qnorm(1-PET.alpha),1,0) # value one for evidence of effect, zero otherwise
+    }
+    if (PET.oneside==FALSE){
+      pet.test &lt;- if_else(abs(coefficients(fat.pet.reg)[[1]]/(sqrt(vcov(fat.pet.reg)[1,1])))&gt;qnorm(1-PET.alpha/2),1,0) # value one for evidence of effect, zero otherwise
+    }
+    # if no sign of effect, we put zero in the estimated effect (and keep the PET standard error) (we could use the WLS or the PEESE one here, but that does not matter much)
+    if (pet.test==0){
+      fat.pet.peese.est &lt;- 0
+      fat.pet.peese.est.se &lt;- sqrt(vcov(fat.pet.reg)[1,1])
+    }
+    # if there is evidence of effect, we run the PEESE estimator
+    if (pet.test==1){
+      # we keep the peese estimates as our main estimates
+      fat.pet.peese.est &lt;- peese.est
+      fat.pet.peese.est.se &lt;- peese.est.se
+    }
+  }
+  # if FAT.neg=TRUE, we discard the FAT PET PEESE results in favor of the WLS results if the FAT slope is negative
+  if (FAT.neg==TRUE){
+    if (sign(fat.pet.slope)==-1){
+      fat.pet.peese.est &lt;- wls.est
+      fat.pet.peese.est.se &lt;- wls.est.se
+    }
+  }
+  results &lt;- as.data.frame(t(c(fat.pet.peese.est,fat.pet.peese.est.se,wls.est,wls.est.se,fat.pet.est,fat.pet.est.se,fat.pet.slope,fat.pet.slope.se,peese.est,peese.est.se,peese.slope,peese.slope.se)))
+  colnames(results) &lt;- c(&quot;FATPETPEESE.effect&quot;,&quot;FATPETPEESE.effect.se&quot;,&quot;WLS.effect&quot;,&quot;WLS.effect.se&quot;,&quot;FATPET.effect&quot;,&quot;FATPET.effect.se&quot;,&quot;FATPET.slope&quot;,&quot;FATPET.slope.se&quot;,&quot;PEESE.effect&quot;,&quot;PEESE.effect.se&quot;,&quot;PEESE.slope&quot;,&quot;PEESE.slope.se&quot;)
+  return(results)
+}</code></pre>
+<p>Let us now try to run FAT-PET-PEESE regression on all our datasets.</p>
+<pre class="r"><code># trying the fatpetpeese function
+test &lt;- fatpetpeese(data=filter(DataFull,Study==&quot;Belle&quot;),FAT.oneside = TRUE,FAT.alpha = 0.1,FAT.neg=FALSE)
+
+# Running the FAT_PET_PEESE regressions and taking the results back
+FATPETPEESE &lt;- do(DataFull,fatpetpeese(data=.,FAT.oneside = TRUE,FAT.alpha = 0.1,FAT.neg=TRUE))
+
+# sending the PEESE estimates to the Aggregate dataset
+Aggregate &lt;- Aggregate %&gt;%
+              left_join(FATPETPEESE,by=&quot;Study&quot;) </code></pre>
+<p>Let us build the PEESE and the FAT curves.</p>
+<pre class="r"><code># generating the data for plotting the PEESE curves and the FATPET
+# grid of points for sed
+grid.sed &lt;- seq(0,1,0.1)
+# drawing the FAT curves by iterating over the values of the two parameters
+FATPET_curves &lt;- map2(Aggregate$FATPET.effect, Aggregate$FATPET.slope, ~ .x + .y*grid.sed) %&gt;%
+  set_names(Aggregate$Original) %&gt;%
+  bind_cols(.)
+# append to grid to the dataset
+FATPET_curves$grid &lt;- grid.sed
+# pivot the dataset in long format to use with facet_wrap
+FATPET_curves &lt;- FATPET_curves %&gt;%
+                  pivot_longer(!grid,names_to=&quot;Original&quot;,values_to=&quot;FATPET_pred&quot;)
+
+# drawing the PEESE curves by iterating over the values of the two parameters
+PEESE_curves &lt;- map2(Aggregate$PEESE.effect, Aggregate$PEESE.slope, ~ .x + .y*grid.sed^2) %&gt;%
+  set_names(Aggregate$Original) %&gt;%
+  bind_cols(.)
+# append to grid to the dataset
+PEESE_curves$grid &lt;- grid.sed
+# pivot the dataset in long format to use with facet_wrap
+PEESE_curves &lt;- PEESE_curves %&gt;%
+                  pivot_longer(!grid,names_to=&quot;Original&quot;,values_to=&quot;PEESE_pred&quot;)</code></pre>
+<p>Let’s see what it looks like:</p>
+<pre class="r"><code># generating the data for plotting the PEESE curves
+ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype=&#39;Replication&#39;),color=&#39;blue&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype=&#39;Meta-analysis&#39;),color=&#39;green&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=WLS.effect,linetype=&#39;WLS&#39;),color=&#39;purple&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype=&#39;Original&#39;),color=&#39;red&#39;) +
+  geom_line(data=PEESE_curves,aes(x=grid,y=PEESE_pred,linetype=&#39;PEESE&#39;),color=&#39;black&#39;) +
+  geom_line(data=FATPET_curves,aes(x=grid,y=FATPET_pred,linetype=&#39;FATPET&#39;),color=&#39;black&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=FATPETPEESE.effect,linetype=&#39;FATPETPEESE&#39;),color=&#39;black&#39;) +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()+
+  xlab(&#39;Standard error of effect size&#39;)+
+  ylab(&#39;Effect size&#39;) + 
+  scale_linetype_manual(name=&quot;Estimate&quot;,values=c(2,3,2,3,2,2,3),guide = guide_legend(override.aes = list(color = c(&quot;black&quot;,&quot;black&quot;,&quot;green&quot;, &quot;red&quot;,&quot;black&quot;, &quot;blue&quot;,&quot;purple&quot;))))</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/FunnelPlotsFullDataFATPETPEESE-1.png" alt="Funnel plot of the studies in Kvarven et al with PEESE and FATPETPEESE" width="960" />
+<p class="caption">
+Funnel plot of the studies in Kvarven et al with PEESE and FATPETPEESE
+</p>
+</div>
+<p><strong>Actually, I should replace the PEESE estimate with the WLS meta-analytic estimate.</strong> <strong>I also should use the WLS meta-analytic estimate as my main estimate and not the original one from Kvarven, since their estimation procedure is unclear and might involve random effects estimation, which magnifies publication bias.</strong> <strong>TO DO</strong></p>
 </div>
 <div id="fat-pet-peese-without-the-negative-correlations" class="section level1">
 <h1>FAT-PET-PEESE without the negative correlations</h1>
+<p>What if instead of computing the PEESE estimate when the correlation between effect size and standard error is negative, we were simply keeping the initial meta-analytic estimate? This is exceedingly simple to do. We just replace the PEESE estimate by the original meta-analytic estimate when the coefficient on the variance of the treatment effect is negative. Let’s just do it.</p>
+<pre class="r"><code># computing the PEESE positive estimates
+Aggregate &lt;- Aggregate %&gt;%
+              mutate(PEESEpos_estimate = if_else(PEESE_var_estimate&gt;0,PEESE_estimate,WLS.effect))</code></pre>
+<p><strong>What would all zeroes look like?</strong></p>
 </div>
 <div id="p-curving" class="section level1">
 <h1>p-curving</h1>
+<p><a href="http://www.p-curve.com/">p-curving</a> has been proposed by Uri Simonsohn, Leif Nelson and Joseph Simmons. It is extensively described in my book <a href="https://chabefer.github.io/STCI/meta.html#p-curving">Statistical Tools for Causal Inference</a>. p-curving was initially proposed as a way to test for the existence of p-hacking using an excess mass of p-values close to 0.05. The same set of authors <a href="https://poseidon01.ssrn.com/delivery.php?ID=968120070017096022067095015077090081127015066012065038099103064095066125118101087000019101125033110002058114102117068031082117013010054030001011069073086069105087004037003126007029115080118115116004080116094099076097092111007065003101127024028025084&amp;EXT=pdf">has also proposed to use p-curving to correct for publication bias</a>. This approach is also extensively described in <a href="https://chabefer.github.io/STCI/meta.html#correction-for-publication-bias-using-p-curving">Statistical Tools for Causal Inference</a>. The idea of p-curving is to make use of the fact that the distribution of statistically significant p-values is uniform under the true distribution. This distribution is called the pp-curve, and the p-curving estimator chooses the value of the true treatment effect that minimizes the distance between the empirical pp-curve and a uniform. Let’s use the code provided in STCI in order to run this estimator on our datasets.</p>
+<pre class="r"><code># Computation of one pp-value for true parameter value thetac and a list of estimates thetak with standard error sigmak
+ppCurveEst &lt;- function(thetac,thetak,sigmak,alpha=0.05){
+  return((pnorm((thetac-thetak)/sigmak)/pnorm(thetac/sigmak-qnorm(1-alpha/2))))
+}
+#KS statistic
+KS.stat.unif &lt;- function(vector){
+  return(ks.test(x=vector,y=punif)$statistic)
+}
+# Distance between the p-curve and the uniform, for a given true value thetac
+ppCurve.Loss.KS &lt;- function(thetac,thetak,sigmak,alpha=0.05){
+  ppvalues &lt;- ppCurveEst(thetac=thetac,thetak=thetak,sigmak=sigmak,alpha=alpha)
+  return(KS.stat.unif(ppvalues))
+}
+#Estimating thetac that minimizes the KS distance by brute grid search first
+# will program the optimize function after
+# thetak vector of (statistically significant) estimates
+# sigmak vector of standard errors of (statistically significant) estimates
+# thetacl and thetach: upper and lower bounds of the grid search
+# ngrid: number of grid points
+ppCurveEstES &lt;- function(thetak,sigmak,thetacl,thetach,alpha=0.05,ngrid=100){
+  # break thetac values in a grid
+  thetac.grid &lt;- seq(from=thetacl,to=thetach,length.out=ngrid)
+  # computes the ppcurve for each point of the grid: outputs a matrix where columns are the ppcurves at each values of thetac
+  ppCurve.grid &lt;- sapply(thetac.grid,ppCurveEst,thetak=thetak,sigmak=sigmak,alpha=alpha)
+  # compute KS stat for each value of thetac (over columns)
+  KS.grid &lt;- apply(ppCurve.grid,2,KS.stat.unif)
+  # computes the value of thetac for which the KS stat is minimum (match identifies the rank of the min in the KSgrid)
+  min.theta.c &lt;- thetac.grid[match(min(KS.grid),KS.grid)]
+  # optimizes over KS stat to find value of thetac that minimizes the KS stat
+  thetahat &lt;- optimize(ppCurve.Loss.KS,c(min.theta.c-0.1,min.theta.c+0.1),thetak=thetak,sigmak=sigmak,alpha=alpha)
+  # returns the optimal thetac, the grid of thetac, the KS stats on the grid, for potential plot, and the ecdf of ppvalues at the optimum theta for graph against the uniform
+  return(list(thetahat$minimum,thetac.grid,KS.grid,ecdf(ppCurve.grid[,match(min(KS.grid),KS.grid)])))
+}
+
+# Function adapted to data frames and variable names
+ppCurveEstESVec &lt;- function(data,theta,sigma,...){
+  result &lt;- ppCurveEstES(thetak=pull(filter(data,data[,theta]&gt;0,abs(data[,theta]/data[,sigma])&gt;=qnorm((1+0.95)/2)),!!sym(theta)),pull(filter(data,data[,theta]&gt;0,abs(data[,theta]/data[,sigma])&gt;=qnorm((1+0.95)/2)),!!sym(sigma)),...)
+  # returns the optimal thetac, the grid of thetac, the KS stats on the grid, for potential plot, and the ecdf of ppvalues at the optimum theta for graph against the uniform
+  return(as.data.frame(result[[1]]))
+}
+
+# Function adapted to fitering by dataset
+ppCurveEstESVecData &lt;- function(DataName,data,...){
+  result &lt;- ppCurveEstESVec(data=filter(data,Study==DataName),...)
+  return(result)
+}</code></pre>
+<p>Let’s implement the functions:</p>
+<pre class="r"><code># list of studies
+studies &lt;- DataFull %&gt;% group_by(Study) %&gt;% summarize(tot = n()) %&gt;% pull(Study)
+ppCurveTest &lt;- ppCurveEstESVecData(&quot;Belle&quot;,data=DataFull,theta=&#39;d&#39;,sigma=&#39;sed&#39;,thetacl=0,thetach=1,alpha=0.05,ngrid=100)
+# lapply to list of studies
+ppCurve &lt;- sapply(studies,ppCurveEstESVecData,data=DataFull,theta=&#39;d&#39;,sigma=&#39;sed&#39;,thetacl=0,thetach=1,alpha=0.05,ngrid=100)
+ppCurve &lt;- data.frame(ppCurve = unlist(ppCurve),Study = studies)
+# merge with aggregate dataset
+Aggregate &lt;- Aggregate %&gt;%
+              left_join(ppCurve,by=c(&#39;Study&#39;))</code></pre>
+<p>Let us now see what it looks like on the data:</p>
+<pre class="r"><code># generating the data for plotting the PEESE curves
+ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype=&#39;Replication&#39;),color=&#39;blue&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype=&#39;Meta-analysis&#39;),color=&#39;green&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=WLS.effect,linetype=&#39;WLS&#39;),color=&#39;purple&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype=&#39;Original&#39;),color=&#39;red&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=ppCurve,linetype=&#39;ppCurve&#39;),color=&#39;black&#39;) +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()+
+  xlab(&#39;Standard error of effect size&#39;)+
+  ylab(&#39;Effect size&#39;) + 
+  scale_linetype_manual(name=&quot;Estimate&quot;,values=c(2,3,2,2,3),guide = guide_legend(override.aes = list(color = c(&quot;green&quot;, &quot;red&quot;,&quot;black&quot;, &quot;blue&quot;,&quot;purple&quot;))))</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/FunnelPlotsFullDatappCurve-1.png" alt="Funnel plot of the studies in Kvarven et al with ppCurve estimates" width="960" />
+<p class="caption">
+Funnel plot of the studies in Kvarven et al with ppCurve estimates
+</p>
+</div>
 </div>
 <div id="selection-models" class="section level1">
 <h1>Selection models</h1>
+<p>Selection models model the joint distribution of treatment effects and of selection into publication as a way to correct for publication bias. The most recent installment of selection models is <a href="https://chabefer.github.io/STCI/meta.html#selection-models">Andrews ans Kasy’s estimator</a>. Let’s assume for now that the distribution of treatment effects is a normal. We might relax this assumption later. Let’s write the selection model:</p>
+<pre class="r"><code># log-likelihood
+Lk &lt;- function(thetak,sigmak,p1,thetac,tau){
+  f &lt;- ifelse(thetak/sigmak&lt;qnorm(1-0.05/2),p1,1)*dnorm((thetak-thetac)/sqrt(sigmak^2+tau^2))/(1-pnorm((qnorm(1-0.05/2)*sigmak-thetac)/sqrt(sigmak^2+tau^2))*(1-p1))
+  return(sum(log(f)))
+}
+#log-likelihood prepared for nlminb: vector of parameters and minimization
+Lk.param &lt;- function(param,thetak,sigmak){
+  f &lt;- Lk(thetak=thetak,sigmak=sigmak,p1=param[[1]],thetac=param[[2]],tau=param[[3]])
+  return(-f)
+}
+
+# Function adapted to data frames and variable names
+Optim.Lk.param.Vec &lt;- function(data,thetak,sigmak,...){
+  optim.Lk &lt;- stats::nlminb(objective=Lk.param,thetak=pull(data,!!sym(thetak)),sigmak=pull(data,!!sym(sigmak)),...)
+  paramAK &lt;- rbind(optim.Lk$par)
+  colnames(paramAK) &lt;- c(&quot;$p_1$&quot;,&quot;$\\theta_c$&quot;,&quot;$\\tau$&quot;)
+  return(paramAK)
+}
+
+# Function adapted to fitering by dataset
+Optim.Lk.param.Vec.Data &lt;- function(DataName,data,...){
+  result &lt;- Optim.Lk.param.Vec(data=filter(data,Study==DataName),...)
+  return(result)
+}</code></pre>
+<p>Let’s now run the estimation for all of our datasets:</p>
+<pre class="r"><code># optimization procedure using nlminb
+MaxEval&lt;-10^5
+MaxIter&lt;-10^5
+Tol&lt;-10^(-8)
+stepsize&lt;-10^(-6)
+# I force a fixed effects meta-analysis by setting tau2=0
+lower.b &lt;- c(0,-Inf,0)
+upper.b &lt;- c(1,Inf,0)
+start.val &lt;- c(0.5,1,0)
+
+# test with Belle
+optim.Lk.Belle &lt;- Optim.Lk.param.Vec.Data(DataName=&quot;Belle&quot;,data=DataFull,thetak=&quot;d&quot;,sigmak=&quot;sed&quot;,start=start.val,lower=lower.b,upper=upper.b,control=list(eval.max=MaxEval,iter.max=MaxIter,abs.tol=Tol))
+# lapply to list of studies
+SelModel &lt;- t(sapply(studies,Optim.Lk.param.Vec.Data,data=DataFull,thetak=&quot;d&quot;,sigmak=&quot;sed&quot;,start=start.val,lower=lower.b,upper=upper.b,control=list(eval.max=MaxEval,iter.max=MaxIter,abs.tol=Tol)))
+colnames(SelModel) &lt;- c(&quot;p1&quot;,&quot;SelModel&quot;,&quot;tau&quot;)
+SelModel &lt;- as.data.frame(SelModel)
+SelModel$Study &lt;- studies
+# merge with aggregate dataset
+Aggregate &lt;- Aggregate %&gt;%
+              left_join(select(SelModel,Study,SelModel),by=c(&#39;Study&#39;))</code></pre>
+<p>Let us now see what it looks like on the data:</p>
+<pre class="r"><code># generating the data for plotting the PEESE curves
+ggplot(DataFull,aes(x=sed,y=d)) +
+  geom_point()+
+  geom_hline(data=Aggregate,aes(yintercept=replication_s,linetype=&#39;Replication&#39;),color=&#39;blue&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=meta_s,linetype=&#39;Meta-analysis&#39;),color=&#39;green&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=WLS.effect,linetype=&#39;WLS&#39;),color=&#39;purple&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=effecto,linetype=&#39;Original&#39;),color=&#39;red&#39;) +
+  geom_hline(data=Aggregate,aes(yintercept=SelModel,linetype=&#39;Selection Model&#39;),color=&#39;black&#39;) +
+  coord_cartesian(ylim=c(-1,2))+
+  facet_wrap(~Original)+
+  theme_bw()+
+  xlab(&#39;Standard error of effect size&#39;)+
+  ylab(&#39;Effect size&#39;) + 
+  scale_linetype_manual(name=&quot;Estimate&quot;,values=c(2,3,2,2,3),guide = guide_legend(override.aes = list(color = c(&quot;green&quot;, &quot;red&quot;, &quot;blue&quot;,&quot;black&quot;,&quot;purple&quot;))))</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/FunnelPlotsFullDataSelModel-1.png" alt="Funnel plot of the studies in Kvarven et al with Selection Model estimates" width="960" />
+<p class="caption">
+Funnel plot of the studies in Kvarven et al with Selection Model estimates
+</p>
+</div>
 </div>
 <div id="regularizing-estimates-by-their-mean-bias" class="section level1">
 <h1>Regularizing estimates by their mean bias</h1>
@@ -441,21 +724,33 @@ Estim_bias &lt;- Aggregate %&gt;%
                 mutate(
                   PEESE_bias = PEESE_estimate-replication_s,
                   PEESEpos_bias = PEESEpos_estimate-replication_s,
-                  Meta_bias = meta_s-replication_s,
+                  FATPETPEESEpos_bias = FATPETPEESE.effect-replication_s,
+                  ppCurve_bias = ppCurve-replication_s,
+                  SelModel_bias = SelModel-replication_s,
+                  Meta_bias = WLS.effect-replication_s,
                   Original_bias = effecto-replication_s
                   ) %&gt;%
                 summarize(
                   PEESE_MeanBias = mean(PEESE_bias),
-                  PEESEpos_MeanBias = mean(PEESEpos_bias),
-                  Meta_MeanBias = mean(Meta_bias),
-                  Original_MeanBias = mean(Original_bias),
                   PEESE_MAD = mean(abs(PEESE_bias)),
-                  PEESEpos_MAD = mean(abs(PEESEpos_bias)),
-                  Meta_MAD = mean(abs(Meta_bias)),
-                  Original_MAD = mean(abs(Original_bias)),
                   PEESE_RMSE = sqrt(mean(PEESE_bias^2)),
+                  PEESEpos_MeanBias = mean(PEESEpos_bias),
+                  PEESEpos_MAD = mean(abs(PEESEpos_bias)),
                   PEESEpos_RMSE = sqrt(mean(PEESEpos_bias^2)),
+                  FATPETPEESEpos_MeanBias = mean(FATPETPEESEpos_bias),
+                  FATPETPEESEpos_MAD = mean(abs(FATPETPEESEpos_bias)),
+                  FATPETPEESEpos_RMSE = sqrt(mean(FATPETPEESEpos_bias^2)),
+                  ppCurve_MeanBias = mean(ppCurve_bias),
+                  ppCurve_MAD = mean(abs(ppCurve_bias)),
+                  ppCurve_RMSE = sqrt(mean(ppCurve_bias^2)),
+                  SelModel_MeanBias = mean(SelModel_bias),
+                  SelModel_MAD = mean(abs(SelModel_bias)),
+                  SelModel_RMSE = sqrt(mean(SelModel_bias^2)),
+                  Meta_MAD = mean(abs(Meta_bias)),
+                  Meta_MeanBias = mean(Meta_bias),
                   Meta_RMSE = sqrt(mean(Meta_bias^2)),
+                  Original_MeanBias = mean(Original_bias),
+                  Original_MAD = mean(abs(Original_bias)),
                   Original_RMSE = sqrt(mean(Original_bias^2))
                 )</code></pre>
 <p>We are going to send these estimates to a table on SKY and we will use them to generate a graph of the performances of various methods for correcting for publication bias at the top of this page.</p>
@@ -484,9 +779,9 @@ dbDisconnect(SKY)</code></pre>
 <p>Finally, a very useful way to visualize our results is to plot the original, meta-analytic and PEESE estimates against the truth.</p>
 <pre class="r"><code># preparing dataset for the plot: pivoting longer
 plotXYdata &lt;- Aggregate %&gt;%
-                select(Original,replication_s,effecto,meta_s,PEESE_estimate,PEESEpos_estimate) %&gt;%
+                select(Original,replication_s,effecto,WLS.effect,PEESE_estimate,PEESEpos_estimate,FATPETPEESE.effect) %&gt;%
                 pivot_longer(
-                  cols=effecto:PEESEpos_estimate,
+                  cols=effecto:FATPETPEESE.effect,
                   names_to=&quot;Method&quot;,
                   values_to=&quot;Estimate&quot; 
                 ) %&gt;%
@@ -495,9 +790,10 @@ plotXYdata &lt;- Aggregate %&gt;%
                 ) %&gt;%
                 mutate(
                   Method = if_else(Method==&quot;effecto&quot;,&quot;Original&quot;,
-                                   if_else(Method==&quot;meta_s&quot;,&quot;Meta-analysis&quot;,
-                                           if_else(Method==&quot;PEESE_estimate&quot;,&quot;PEESE&quot;,&quot;PEESEpos&quot;))),
-                  Method=factor(Method,levels=c(&quot;Original&quot;,&quot;Meta-analysis&quot;,&quot;PEESE&quot;,&quot;PEESEpos&quot;))
+                                   if_else(Method==&quot;WLS.effect&quot;,&quot;Meta-analysis&quot;,
+                                           if_else(Method==&quot;PEESE_estimate&quot;,&quot;PEESE&quot;,
+                                                   if_else(Method==&quot;FATPETPEESE.effect&quot;,&quot;FATPETPEESEpos&quot;,&quot;PEESEpos&quot;)))),
+                  Method=factor(Method,levels=c(&quot;Original&quot;,&quot;Meta-analysis&quot;,&quot;PEESE&quot;,&quot;PEESEpos&quot;,&quot;FATPETPEESEpos&quot;))
                 )
 
 # plot
@@ -505,7 +801,7 @@ ggplot(plotXYdata,aes(x=Replication,y=Estimate,color=Method)) +
   geom_point()+
   geom_smooth(se = FALSE)+
   geom_function(fun=~.x,color=&quot;black&quot;,linetype=&quot;dashed&quot;)+
-  coord_cartesian(xlim=c(-0.1,0.8),ylim=c(-0.1,1))+
+  coord_cartesian(xlim=c(-0.1,0.8),ylim=c(-0.1,3))+
   theme_bw() +
   xlab(&quot;Replication effect size&quot;) +
   ylab(&quot;Estimated effect size&quot;)</code></pre>

@@ -27,7 +27,7 @@ PerfMethodsPubBias <- dbReadTable(SKY,"Correct_Pub_Bias") %>%
                         mutate(
                           Criteria=factor(Criteria,levels=c("MeanBias","MAD","RMSE")),
                           Method = if_else(Method=="Meta","Meta-analysis",Method),
-                          Method=factor(Method,levels=c("Original","Meta-analysis","PEESE","PEESEpos"))
+                          Method=factor(Method,levels=c("Original","Meta-analysis","PEESE","PEESEpos","FATPETPEESEpos","ppCurve","SelModel"))
                         )
 # disconnecting
 dbDisconnect(SKY)
