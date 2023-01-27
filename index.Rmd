@@ -9,7 +9,7 @@ This website contains:
 * [Results on real data](Estimation_Pub_bias.html)
 
 The main results of the project so far can be summarized in the performance of the various estimators of the true effect compared to pre-registered replications.
-The analysis behind this data is available [here](Estimation_Pub_Bias.html).
+The analysis behind this data is available [here](Estimation_Pub_bias.html).
 The following graph shows it all:
 
 ```{r PerfMethods,echo=FALSE,results=FALSE,fig.cap='Performance of various estimators of an effect compared to pre-registered replications',fig.align='center',fig.width=10}
