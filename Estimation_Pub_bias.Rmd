@@ -566,8 +566,8 @@ Let us compute several such estimates: the mean bias, the mean absolute deviatio
 We will do that for the PEESE estimator and for the meta-analytic estimator, in order to measure the improvement in estimation brought about by the PEESE estimator over the meta-analytic estimate.
 
 ```{r EstimPerf}
-# computing the bias, mean absolute deviation and root mean square error of PEESE and the meta-analysis
-Estim_bias <- Aggregate %>%
+# computing the bias of each estimator
+Aggregate <- Aggregate %>%
                 mutate(
                   PEESE_bias = PEESE_estimate-replication_s,
                   PEESEpos_bias = PEESEpos_estimate-replication_s,
@@ -576,7 +576,9 @@ Estim_bias <- Aggregate %>%
                   SelModel_bias = SelModel-replication_s,
                   Meta_bias = WLS.effect-replication_s,
                   Original_bias = effecto-replication_s
-                  ) %>%
+                  ) 
+# Computing the mean absolute deviation and root mean square error of each estimator
+Estim_bias <- Aggregate %>%
                 summarize(
                   PEESE_MeanBias = mean(PEESE_bias),
                   PEESE_MAD = mean(abs(PEESE_bias)),
@@ -663,4 +665,104 @@ ggplot(plotXYdata,aes(x=Replication,y=Estimate,color=Method)) +
   
 ```
 
+Another useful way to look at the data is to make a plot of the bias of each method with respect to the true effect size, and of the bias of the corrected estimates as a function of the bias in the original data or in the meta-analysis.
+
+## Bias with respect to the true effect size
+
+Let us first build the bias of each method with respect to the true effect size.
+
+```{r PlotBiasMethodsXY,fig.cap='Bias of estimates as a function of the replication effect size',fig.align='center',fig.width=10}
+# preparing dataset for the plot: pivoting longer
+plotBiasXYdata <- Aggregate %>%
+                select(replication_s,contains("_bias")) %>%
+                pivot_longer(
+                  cols=PEESE_bias:Original_bias,
+                  names_to=c("Method","Suppl"),
+                  values_to="Bias",
+                  names_sep='_'
+                ) %>%
+                select(-Suppl) %>%
+                rename(
+                  Replication = replication_s
+                ) %>%
+                mutate(
+                  Method=factor(Method,levels=c("Original","Meta","PEESE","PEESEpos","FATPETPEESEpos","SelModel","ppCurve"))
+                )
+
+# plot
+ggplot(plotBiasXYdata,aes(x=Replication,y=Bias,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+#  geom_function(fun=~.x,color="black",linetype="dashed")+
+#  coord_cartesian(xlim=c(-0.1,0.8),ylim=c(-0.1,3))+
+  theme_bw() +
+  xlab("Replication effect size") +
+  ylab("Bias")
+  
+```
+
+## Bias with respect to initial bias
+
+Let us now plot the bias of each method with respect to the initial bias (the one with the original estimate or the meta-analysis).
+
+### Bias with respect to the original effect
+
+```{r PlotBiasOriginalMethodsXY,fig.cap='Bias of estimates as a function of the bias of the original estimate',fig.align='center',fig.width=10}
+# preparing dataset for the plot: pivoting longer
+plotBiasOriginalXYdata <- Aggregate %>%
+                select(contains("_bias")) %>%
+                pivot_longer(
+                  cols=PEESE_bias:Meta_bias,
+                  names_to=c("Method","Suppl"),
+                  values_to="Bias",
+                  names_sep='_'
+                ) %>%
+                select(-Suppl) %>%
+                mutate(
+                  Method=factor(Method,levels=c("Meta","PEESE","PEESEpos","FATPETPEESEpos","SelModel","ppCurve"))
+                )
+
+# plot
+ggplot(plotBiasOriginalXYdata,aes(x=Original_bias,y=Bias,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  geom_function(fun=~.x,color="black",linetype="dashed")+
+  coord_cartesian(xlim=c(-0.1,1),ylim=c(-0.1,1))+
+  theme_bw() +
+  xlab("Bias of original estimate") +
+  ylab("Bias")
+  
+```
+
+### Bias with respect to the meta-analytic estimate
+
+```{r PlotBiasMetaMethodsXY,fig.cap='Bias of estimates as a function of the bias of the meta-analytic estimate',fig.align='center',fig.width=10}
+# preparing dataset for the plot: pivoting longer
+plotBiasMetaXYdata <- Aggregate %>%
+                select(contains("_bias")) %>%
+                pivot_longer(
+                  cols=PEESE_bias:SelModel_bias,
+                  names_to=c("Method","Suppl"),
+                  values_to="Bias",
+                  names_sep='_'
+                ) %>%
+                select(-Suppl) %>%
+                mutate(
+                  Method=factor(Method,levels=c("PEESE","PEESEpos","FATPETPEESEpos","SelModel","ppCurve"))
+                )
+
+# plot
+ggplot(plotBiasMetaXYdata,aes(x=Original_bias,y=Bias,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  geom_function(fun=~.x,color="black",linetype="dashed")+
+  coord_cartesian(xlim=c(-0.1,1),ylim=c(-0.1,1))+
+  theme_bw() +
+  xlab("Bias of meta-analytic estimate") +
+  ylab("Bias")
+  
+```
+**Run FATPETPEESE wuthout pos**
+**Run FATPET with and without pos, including the one forcing the zeroes (stopping just before PEESE)**
+**Run FATPETPEESE with alpha=0.05 for both tests**
 

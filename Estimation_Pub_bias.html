@@ -719,8 +719,8 @@ Funnel plot of the studies in Kvarven et al with Selection Model estimates
 <div id="performance-of-the-estimators" class="section level1">
 <h1>Performance of the estimators</h1>
 <p>One way to compute the performance of the PEESE estimator (or of any estimator) is to report some statistics for its distance to the truth (taken here to be the replication estimate). Let us compute several such estimates: the mean bias, the mean absolute deviation and the root mean squared error. We will do that for the PEESE estimator and for the meta-analytic estimator, in order to measure the improvement in estimation brought about by the PEESE estimator over the meta-analytic estimate.</p>
-<pre class="r"><code># computing the bias, mean absolute deviation and root mean square error of PEESE and the meta-analysis
-Estim_bias &lt;- Aggregate %&gt;%
+<pre class="r"><code># computing the bias of each estimator
+Aggregate &lt;- Aggregate %&gt;%
                 mutate(
                   PEESE_bias = PEESE_estimate-replication_s,
                   PEESEpos_bias = PEESEpos_estimate-replication_s,
@@ -729,7 +729,9 @@ Estim_bias &lt;- Aggregate %&gt;%
                   SelModel_bias = SelModel-replication_s,
                   Meta_bias = WLS.effect-replication_s,
                   Original_bias = effecto-replication_s
-                  ) %&gt;%
+                  ) 
+# Computing the mean absolute deviation and root mean square error of each estimator
+Estim_bias &lt;- Aggregate %&gt;%
                 summarize(
                   PEESE_MeanBias = mean(PEESE_bias),
                   PEESE_MAD = mean(abs(PEESE_bias)),
@@ -810,6 +812,112 @@ ggplot(plotXYdata,aes(x=Replication,y=Estimate,color=Method)) +
 <p class="caption">
 Original, meta-analytic and PEESE estimates as a function of the replication effect size
 </p>
+</div>
+<p>Another useful way to look at the data is to make a plot of the bias of each method with respect to the true effect size, and of the bias of the corrected estimates as a function of the bias in the original data or in the meta-analysis.</p>
+<div id="bias-with-respect-to-the-true-effect-size" class="section level2">
+<h2>Bias with respect to the true effect size</h2>
+<p>Let us first build the bias of each method with respect to the true effect size.</p>
+<pre class="r"><code># preparing dataset for the plot: pivoting longer
+plotBiasXYdata &lt;- Aggregate %&gt;%
+                select(replication_s,contains(&quot;_bias&quot;)) %&gt;%
+                pivot_longer(
+                  cols=PEESE_bias:Original_bias,
+                  names_to=c(&quot;Method&quot;,&quot;Suppl&quot;),
+                  values_to=&quot;Bias&quot;,
+                  names_sep=&#39;_&#39;
+                ) %&gt;%
+                select(-Suppl) %&gt;%
+                rename(
+                  Replication = replication_s
+                ) %&gt;%
+                mutate(
+                  Method=factor(Method,levels=c(&quot;Original&quot;,&quot;Meta&quot;,&quot;PEESE&quot;,&quot;PEESEpos&quot;,&quot;FATPETPEESEpos&quot;,&quot;SelModel&quot;,&quot;ppCurve&quot;))
+                )
+
+# plot
+ggplot(plotBiasXYdata,aes(x=Replication,y=Bias,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+#  geom_function(fun=~.x,color=&quot;black&quot;,linetype=&quot;dashed&quot;)+
+#  coord_cartesian(xlim=c(-0.1,0.8),ylim=c(-0.1,3))+
+  theme_bw() +
+  xlab(&quot;Replication effect size&quot;) +
+  ylab(&quot;Bias&quot;)</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/PlotBiasMethodsXY-1.png" alt="Bias of estimates as a function of the replication effect size" width="960" />
+<p class="caption">
+Bias of estimates as a function of the replication effect size
+</p>
+</div>
+</div>
+<div id="bias-with-respect-to-initial-bias" class="section level2">
+<h2>Bias with respect to initial bias</h2>
+<p>Let us now plot the bias of each method with respect to the initial bias (the one with the original estimate or the meta-analysis).</p>
+<div id="bias-with-respect-to-the-original-effect" class="section level3">
+<h3>Bias with respect to the original effect</h3>
+<pre class="r"><code># preparing dataset for the plot: pivoting longer
+plotBiasOriginalXYdata &lt;- Aggregate %&gt;%
+                select(contains(&quot;_bias&quot;)) %&gt;%
+                pivot_longer(
+                  cols=PEESE_bias:Meta_bias,
+                  names_to=c(&quot;Method&quot;,&quot;Suppl&quot;),
+                  values_to=&quot;Bias&quot;,
+                  names_sep=&#39;_&#39;
+                ) %&gt;%
+                select(-Suppl) %&gt;%
+                mutate(
+                  Method=factor(Method,levels=c(&quot;Meta&quot;,&quot;PEESE&quot;,&quot;PEESEpos&quot;,&quot;FATPETPEESEpos&quot;,&quot;SelModel&quot;,&quot;ppCurve&quot;))
+                )
+
+# plot
+ggplot(plotBiasOriginalXYdata,aes(x=Original_bias,y=Bias,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  geom_function(fun=~.x,color=&quot;black&quot;,linetype=&quot;dashed&quot;)+
+  coord_cartesian(xlim=c(-0.1,1),ylim=c(-0.1,1))+
+  theme_bw() +
+  xlab(&quot;Bias of original estimate&quot;) +
+  ylab(&quot;Bias&quot;)</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/PlotBiasOriginalMethodsXY-1.png" alt="Bias of estimates as a function of the bias of the original estimate" width="960" />
+<p class="caption">
+Bias of estimates as a function of the bias of the original estimate
+</p>
+</div>
+</div>
+<div id="bias-with-respect-to-the-meta-analytic-estimate" class="section level3">
+<h3>Bias with respect to the meta-analytic estimate</h3>
+<pre class="r"><code># preparing dataset for the plot: pivoting longer
+plotBiasMetaXYdata &lt;- Aggregate %&gt;%
+                select(contains(&quot;_bias&quot;)) %&gt;%
+                pivot_longer(
+                  cols=PEESE_bias:SelModel_bias,
+                  names_to=c(&quot;Method&quot;,&quot;Suppl&quot;),
+                  values_to=&quot;Bias&quot;,
+                  names_sep=&#39;_&#39;
+                ) %&gt;%
+                select(-Suppl) %&gt;%
+                mutate(
+                  Method=factor(Method,levels=c(&quot;PEESE&quot;,&quot;PEESEpos&quot;,&quot;FATPETPEESEpos&quot;,&quot;SelModel&quot;,&quot;ppCurve&quot;))
+                )
+
+# plot
+ggplot(plotBiasMetaXYdata,aes(x=Original_bias,y=Bias,color=Method)) +
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  geom_function(fun=~.x,color=&quot;black&quot;,linetype=&quot;dashed&quot;)+
+  coord_cartesian(xlim=c(-0.1,1),ylim=c(-0.1,1))+
+  theme_bw() +
+  xlab(&quot;Bias of meta-analytic estimate&quot;) +
+  ylab(&quot;Bias&quot;)</code></pre>
+<div class="figure" style="text-align: center">
+<img src="Estimation_Pub_bias_files/figure-html/PlotBiasMetaMethodsXY-1.png" alt="Bias of estimates as a function of the bias of the meta-analytic estimate" width="960" />
+<p class="caption">
+Bias of estimates as a function of the bias of the meta-analytic estimate
+</p>
+</div>
+<p><strong>Run FATPETPEESE wuthout pos</strong> <strong>Run FATPET with and without pos, including the one forcing the zeroes (stopping just before PEESE)</strong> <strong>Run FATPETPEESE with alpha=0.05 for both tests</strong></p>
+</div>
 </div>
 </div>
 

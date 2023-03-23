@@ -41,8 +41,10 @@ ggplot(PerfMethodsPubBias,aes(x=Criteria,y=Bias,fill=Method))+
 The original estimates have large baises.
 Meta-analysis divides the mean bias by two.
 The PEESE and PEESEpos methods brings the bias further down by 40\%.
-The other criteria tell a similar story.
-This data makes the PEESE and PEESEpos estimators the best estimators so far to estimate true treatment effects using the published record.
+The FATPETPEESEpos method brings the bias further down by 50\%.
+The other criteria tell a braodly similar story.
+This data makes the FATPETPEESEpos estimators the best estimators so far to estimate true treatment effects using the published record, with selection models a close second.
+p-curving does not manage to improve on bais correction beyond what standard meta-analysis can achieve.
 
 If you have comments on this project, please post them on the corresponding [GitHub comment page](https://github.com/chabefer/SKY_Correct_Pub_Bias/discussions).
 
